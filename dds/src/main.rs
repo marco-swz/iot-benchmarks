@@ -1,6 +1,4 @@
 use rustdds::*;
-use rustdds::no_key::{DataReader, DataWriter, DataSample, Sample}; // We use a NO_KEY topic here
-use serde::{Serialize, Deserialize};
 use mio::{Events, Interest, Poll, Token};
 
 fn main() {
@@ -11,33 +9,43 @@ fn main() {
       .build();
 
     let subscriber = domain_participant.create_subscriber(&qos).unwrap();
-    let publisher = domain_participant.create_publisher(&qos).unwrap();
 
-    let some_topic = domain_participant
-        .create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey)
+    let topic_req = domain_participant
+        .create_topic("dds_req".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
         .unwrap();
 
-
-    let mut reader = subscriber
+    let mut sub = subscriber
         .create_datareader_no_key::<String, CDRDeserializerAdapter<String>>(
-            &some_topic, 
+            &topic_req, 
             None)
         .unwrap();
 
-    let writer = publisher
+    let publisher = domain_participant.create_publisher(&qos).unwrap();
+
+    let topic_rsp = domain_participant
+        .create_topic("dds_rsp".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
+        .unwrap();
+
+    let publ = publisher
       .create_datawriter_no_key::<String, CDRSerializerAdapter<String>>(
-        &some_topic,
+        &topic_rsp,
         None)
       .unwrap();
+
+    const SUB_READY: Token = Token(1);
+    const SUB_STATUS_READY: Token = Token(2);
 
     let mut poll = Poll::new().unwrap();
     let mut events = Events::with_capacity(5);
 
-    let mut reader_opt = poll
-        .registry()
+    poll.registry()
+        .register(&mut sub, SUB_READY, Interest::READABLE)
+        .unwrap();
+
+    poll.registry()
         .register(
-            reader.as_status_source(),
-            WRITER_STATUS_READY,
+            sub.as_status_source(),
+            SUB_STATUS_READY,
             Interest::READABLE,
         )
         .unwrap();
@@ -50,37 +58,25 @@ fn main() {
 
         for event in &events {
             match event.token() {
-                READER_READY => {
-                    match reader_opt {
-                        Some(ref mut reader) => {
-                            loop {
-                                println!("DataReader triggered");
-                                match reader.take_next_sample() {
-                                    Ok(Some(sample)) => match sample.into_value() {
-                                        Sample::Value(sample) => {
-                                            writer.write(sample, None).unwrap();
-                                        }
-                                        Sample::Dispose(key) => println!("Disposed key"),
-                                    },
-                                    Ok(None) => break, // no more data
-                                    Err(e) => println!("DataReader error: {e:?}")
-                                } // match next sample
-                            }
-                        }
-                    } // match reader_opt
-                },
-                READER_STATUS_READY => match reader_opt {
-                    Some(ref mut reader) => {
-                        while let Some(status) = reader.try_recv_status() {
-                            println!("DataReader status: {status:?}");
-                        }
-                    }
-                    None => {
-                        error!("Where is my reader?");
+                SUB_READY => {
+                    loop {
+                        println!("DataReader triggered");
+                        match sub.take_next_sample() {
+                            Ok(Some(sample)) => {
+                                publ.write(sample.into_value(), None).unwrap();
+                            },
+                            Ok(None) => break, // no more data
+                            Err(e) => println!("DataReader error: {e:?}")
+                        } 
                     }
                 },
+                SUB_STATUS_READY => {
+                    while let Some(status) = sub.try_recv_status() {
+                        println!("DataReader status: {status:?}");
+                    }
+                },
+                Token(_) => (),
             } // match token
-        }
+        } // for
     }
-
 }
