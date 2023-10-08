@@ -23,7 +23,7 @@ impl BenchStats {
 
 pub trait BenchClient {
     fn send(&self, msg: &String) -> Result<()>;
-    fn wait_for_response(&self) -> Result<String>;
+    fn wait_for_response(&mut self) -> Result<String>;
 }
 
 pub struct Benchmarker {
@@ -37,7 +37,7 @@ impl Benchmarker {
         };
     }
 
-    pub fn run(&self, message_len: usize, msgs_per_sec: f64, duration_sec: u64) {
+    pub fn run(&mut self, message_len: usize, msgs_per_sec: f64, duration_sec: u64) {
         let time_wait = Duration::from_secs_f64(1. / msgs_per_sec);
         let time_start = Instant::now();
         let duration = Duration::from_secs(duration_sec);
@@ -49,10 +49,12 @@ impl Benchmarker {
 
             if self.client.send(&msg).is_err() { continue; }
             stats.num_sent += 1;
+            println!("sent: {}", msg);
 
             match self.client.wait_for_response() {
                 Ok(resp) => {
                     stats.num_received += 1;
+                    println!("recv: {}", resp);
                     if resp != msg {
                         stats.num_errors += 1;
                     }
@@ -62,7 +64,6 @@ impl Benchmarker {
                 }
             };
 
-            println!("{}", msg);
             std::thread::sleep(time_wait);
         }
 
