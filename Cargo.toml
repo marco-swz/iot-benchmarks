@@ -8,6 +8,10 @@ name = "dds-echo"
 path = "src/dds/echo_client.rs"
 
 [[bin]]
+name = "dds-bench"
+path = "src/dds/bench_client.rs"
+
+[[bin]]
 name = "mqtt-echo"
 path = "src/mqtt/echo_client.rs"
 
