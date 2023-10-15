@@ -15,6 +15,10 @@ path = "src/dds/bench_client.rs"
 name = "mqtt-echo"
 path = "src/mqtt/echo_client.rs"
 
+[[bin]]
+name = "mqtt-bench"
+path = "src/mqtt/bench_client.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 mio = "0.8.8"

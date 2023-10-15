@@ -1,34 +1,28 @@
-pub mod bench_client;
+use std::time::{Duration, Instant};
 
+use mqtt::Client;
 use paho_mqtt as mqtt;
 use anyhow::Result;
 
-fn try_reconnect(client: &mqtt::Client) -> bool {
-    println!("Connection lost. Reconnecting..");
-    for _ in 0..60 {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        if client.reconnect().is_ok() {
-            println!("Reconnect sucessful");
-            return true;
-        }
-    }
-    println!("Failed to reconnect");
-    return false;
-}
+#[path="../benchmarker.rs"]
+mod benchmarker;
 
-fn main() -> Result<()> {
+use benchmarker::DirStats;
+
+use self::benchmarker::run_benchmark;
+
+fn mqtt_init() -> Client {
     let host = "mqtt://localhost:1883".to_string();
     println!("Connecting to MQTT broker at {}", host);
 
     let opts = mqtt::CreateOptionsBuilder::new()
         .server_uri(host)
-        .client_id("mqtt_echo")
+        .client_id("mqtt_bench")
         .finalize();
 
     let client = mqtt::Client::new(opts)
         .expect("Error creating client");
 
-    let rx = client.start_consuming();
 
     let resp_disconnect = mqtt::MessageBuilder::new()
         .topic("mqtt_echo")
@@ -50,7 +44,7 @@ fn main() -> Result<()> {
                     println!("Session already present on broker");
                 } else {
                     println!("Subscribing to topic 'mqtt_req'");
-                    client.subscribe("mqtt_req", 1)
+                    client.subscribe("mqtt_rsp", 1)
                         .and_then(|rsp| {
                             return rsp.subscribe_response().ok_or(mqtt::Error::General("Bad response"));
                         })
@@ -70,30 +64,70 @@ fn main() -> Result<()> {
         }
     }
 
+    return client;
+}
+
+fn mqtt_listen(client: Client) -> Result<DirStats> {
     let exit_client = client.clone();
     ctrlc::set_handler(move || {
         exit_client.stop_consuming();
     }).expect("Error setting up exit client");
 
+
+    let mut num_recv = 0; let mut num_errors = 0;
+    let rx = client.start_consuming();
+
     println!("Waiting for messages..");
+
+    let time_start = Instant::now();
     for msg in rx.iter() {
         if let Some(req) = msg {
-
-            println!("{}", req);
-            let rsp = mqtt::MessageBuilder::new()
-                .topic("mqtt_rsp")
-                .payload(req.payload())
-                .qos(1)
-                .finalize();
-
-            if let Err(_) = client.publish(rsp) {
-                println!("Error sending response");
-            }
-
+            num_recv += 1;
         } else if client.is_connected() || !try_reconnect(&client) {
             break;
+        } else {
+            num_errors += 1;
         }
     }
 
-    return Ok(());
+    let duration = time_start.elapsed();
+
+    return Ok(DirStats{
+        num: num_recv,
+        num_errors,
+        duration,
+    });
 }
+
+fn mqtt_send(client: &Client, msg: &String) -> Result<()> {
+    let rsp = mqtt::MessageBuilder::new()
+        .topic("mqtt_req")
+        .payload(msg.as_str())
+        .qos(1)
+        .finalize();
+
+    return Ok(client.publish(rsp)?)
+}
+
+fn main() {
+    run_benchmark(
+        mqtt_init,
+        mqtt_listen,
+        mqtt_send,
+        4, 5., 5
+    );
+}
+
+fn try_reconnect(client: &mqtt::Client) -> bool {
+    println!("Connection lost. Reconnecting..");
+    for _ in 0..60 {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if client.reconnect().is_ok() {
+            println!("Reconnect sucessful");
+            return true;
+        }
+    }
+    println!("Failed to reconnect");
+    return false;
+}
+
