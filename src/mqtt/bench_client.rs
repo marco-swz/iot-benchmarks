@@ -11,13 +11,13 @@ use benchmarker::DirStats;
 
 use self::benchmarker::run_benchmark;
 
-fn mqtt_init() -> Client {
+fn mqtt_init(topic: &str) -> Client {
     let host = "mqtt://localhost:1883".to_string();
     println!("Connecting to MQTT broker at {}", host);
 
     let opts = mqtt::CreateOptionsBuilder::new()
         .server_uri(host)
-        .client_id("mqtt_bench")
+        .client_id(topic)
         .finalize();
 
     let client = mqtt::Client::new(opts)
@@ -25,7 +25,7 @@ fn mqtt_init() -> Client {
 
 
     let resp_disconnect = mqtt::MessageBuilder::new()
-        .topic("mqtt_echo")
+        .topic("mqtt_disconnect")
         .payload("Connection lost")
         .finalize();
 
@@ -43,8 +43,8 @@ fn mqtt_init() -> Client {
                 if conn_rsp.session_present {
                     println!("Session already present on broker");
                 } else {
-                    println!("Subscribing to topic 'mqtt_req'");
-                    client.subscribe("mqtt_rsp", 1)
+                    println!("Subscribing to topic {}", topic);
+                    client.subscribe(topic, 1)
                         .and_then(|rsp| {
                             return rsp.subscribe_response().ok_or(mqtt::Error::General("Bad response"));
                         })
@@ -81,7 +81,7 @@ fn mqtt_listen(client: Client) -> Result<DirStats> {
 
     let time_start = Instant::now();
     for msg in rx.iter() {
-        if let Some(req) = msg {
+        if let Some(_req) = msg {
             num_recv += 1;
         } else if client.is_connected() || !try_reconnect(&client) {
             break;
@@ -111,8 +111,9 @@ fn mqtt_send(client: &Client, msg: &String) -> Result<()> {
 
 fn main() {
     run_benchmark(
-        mqtt_init,
+        || mqtt_init("mqtt_rsp"),
         mqtt_listen,
+        || mqtt_init("mqtt_req"),
         mqtt_send,
         4, 5., 5
     );
