@@ -35,14 +35,14 @@ type FnSend<T> = fn(client: &T, msg: &String) -> Result<()>;
 type FnInit<T> = fn() -> T;
 
 
-pub fn run_benchmark<T: Send>(fn_init: FnInit<T>, fn_listen: FnListen<T>, fn_send: FnSend<T>, message_len: usize, msgs_per_sec: f64, duration_sec: u64) {
+pub fn run_benchmark<T: Send + 'static>(fn_init: FnInit<T>, fn_listen: FnListen<T>, fn_send: FnSend<T>, message_len: usize, msgs_per_sec: f64, duration_sec: u64) {
     let time_wait = Duration::from_secs_f64(1. / msgs_per_sec);
     let time_start = Instant::now();
     let duration = Duration::from_secs(duration_sec);
 
 
-    let client = fn_init();
     let listen_handle = std::thread::spawn(move || {
+        let client = fn_init();
         return fn_listen(client);
     });
 
