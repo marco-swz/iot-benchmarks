@@ -1,0 +1,10 @@
+{
+  "num_sent": 10,
+  "num_received": 10,
+  "num_errors_sent": 0,
+  "num_errors_recv": 0,
+  "duration": {
+    "secs": 5,
+    "nanos": 115462037
+  }
+}

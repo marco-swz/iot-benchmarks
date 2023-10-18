@@ -7,7 +7,7 @@ use anyhow::Result;
 #[path="../benchmarker.rs"]
 mod benchmarker;
 
-use benchmarker::DirStats;
+use benchmarker::{ClientStats, BenchSettings};
 use benchmarker::run_benchmark;
 
 fn mqtt_init(topic: &str) -> Client {
@@ -66,7 +66,7 @@ fn mqtt_init(topic: &str) -> Client {
     return client;
 }
 
-fn mqtt_listen(client: Client, duration: Duration) -> Result<DirStats> {
+fn mqtt_listen(client: Client, duration: Duration) -> Result<ClientStats> {
     // Allow exiting using ctrl-c
     let exit_client = client.clone();
     ctrlc::set_handler(move || {
@@ -98,7 +98,7 @@ fn mqtt_listen(client: Client, duration: Duration) -> Result<DirStats> {
 
     let duration = time_start.elapsed();
 
-    return Ok(DirStats{
+    return Ok(ClientStats{
         num: num_recv,
         num_errors,
         duration,
@@ -115,16 +115,6 @@ fn mqtt_send(client: &Client, msg: &String) -> Result<()> {
     return Ok(client.publish(rsp)?)
 }
 
-fn main() {
-    run_benchmark(
-        || mqtt_init("mqtt_rsp"),
-        mqtt_listen,
-        || mqtt_init("mqtt_req"),
-        mqtt_send,
-        4, 5., 5
-    );
-}
-
 fn try_reconnect(client: &mqtt::Client) -> bool {
     println!("Connection lost. Reconnecting..");
     for _ in 0..60 {
@@ -138,3 +128,17 @@ fn try_reconnect(client: &mqtt::Client) -> bool {
     return false;
 }
 
+fn main() {
+    let settings = BenchSettings{
+        fn_init_send: || mqtt_init("mqtt_req"),
+        fn_init_listen: || mqtt_init("mqtt_rsp"),
+        fn_send: mqtt_send,
+        fn_listen: mqtt_listen,
+        duration: Duration::from_secs(5),
+        msgs_per_sec: 2.,
+        message_len: 10,
+        out_file: "data/mqtt.json".to_string(),
+    };
+
+    run_benchmark(settings);
+}
