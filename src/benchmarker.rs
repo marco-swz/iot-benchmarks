@@ -1,4 +1,5 @@
-use std::{time::{Duration, Instant}, thread::Thread};
+use std::time::{Duration, Instant};
+use std::sync::{Arc, Barrier};
 
 use anyhow::Result;
 
@@ -30,7 +31,7 @@ impl BenchStats {
     }
 }
 
-type FnListen<T> = fn(client: T) -> Result<DirStats>;
+type FnListen<T> = fn(client: T, duration: Duration) -> Result<DirStats>;
 type FnSend<T> = fn(client: &T, msg: &String) -> Result<()>;
 type FnInit<T> = fn() -> T;
 
@@ -40,16 +41,21 @@ pub fn run_benchmark<T: Send + 'static>(fn_init_listen: FnInit<T>, fn_listen: Fn
     let time_start = Instant::now();
     let duration = Duration::from_secs(duration_sec);
 
+    // Make sure all clients are initialized before starting
+    let barrier = Arc::new(Barrier::new(1));
+    let barrier_clone = Arc::clone(&barrier);
 
     let listen_handle = std::thread::spawn(move || {
         let client = fn_init_listen();
-        return fn_listen(client);
+        barrier_clone.wait();
+        return fn_listen(client, duration);
     });
 
     let client = fn_init_send();
 
     let mut stats = BenchStats::new(duration);
 
+    barrier.wait();
     while time_start.elapsed() < duration {
         std::thread::sleep(time_wait);
 

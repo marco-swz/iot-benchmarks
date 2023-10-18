@@ -8,8 +8,7 @@ use anyhow::Result;
 mod benchmarker;
 
 use benchmarker::DirStats;
-
-use self::benchmarker::run_benchmark;
+use benchmarker::run_benchmark;
 
 fn mqtt_init(topic: &str) -> Client {
     let host = "mqtt://localhost:1883".to_string();
@@ -67,12 +66,19 @@ fn mqtt_init(topic: &str) -> Client {
     return client;
 }
 
-fn mqtt_listen(client: Client) -> Result<DirStats> {
+fn mqtt_listen(client: Client, duration: Duration) -> Result<DirStats> {
+    // Allow exiting using ctrl-c
     let exit_client = client.clone();
     ctrlc::set_handler(move || {
         exit_client.stop_consuming();
     }).expect("Error setting up exit client");
 
+    // Automatically exit after duration + 5sec
+    let exit_client = client.clone();
+    let _ = std::thread::spawn(move || {
+        std::thread::sleep(duration + Duration::from_secs(5));
+        exit_client.stop_consuming();
+    });
 
     let mut num_recv = 0; let mut num_errors = 0;
     let rx = client.start_consuming();
