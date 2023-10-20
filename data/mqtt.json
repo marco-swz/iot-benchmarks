@@ -1,10 +1,14 @@
 {
-  "num_sent": 10,
-  "num_received": 10,
+  "num_sent": 28660,
+  "num_received": 28660,
   "num_errors_sent": 0,
   "num_errors_recv": 0,
   "duration": {
-    "secs": 5,
-    "nanos": 115462037
+    "secs": 10,
+    "nanos": 279867
+  },
+  "latency": {
+    "secs": 0,
+    "nanos": 42289076
   }
 }

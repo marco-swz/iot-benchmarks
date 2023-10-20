@@ -1,5 +1,3 @@
-pub mod bench_client;
-
 use paho_mqtt as mqtt;
 use anyhow::Result;
 
@@ -79,7 +77,6 @@ fn main() -> Result<()> {
     for msg in rx.iter() {
         if let Some(req) = msg {
 
-            println!("{}", req);
             let rsp = mqtt::MessageBuilder::new()
                 .topic("mqtt_rsp")
                 .payload(req.payload())

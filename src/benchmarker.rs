@@ -20,6 +20,7 @@ pub struct ClientStats {
     pub num: usize,
     pub num_errors: usize,
     pub duration: Duration,
+    pub time_last_msg: Instant,
 }
 
 impl ClientStats {
@@ -28,6 +29,7 @@ impl ClientStats {
             num: 0,
             num_errors: 0,
             duration: Duration::from_secs(0),
+            time_last_msg: Instant::now(),
         };
     }
 }
@@ -39,6 +41,7 @@ struct BenchStats {
     pub num_errors_sent: usize,
     pub num_errors_recv: usize,
     pub duration: Duration,
+    pub latency: Duration,
 }
 
 impl BenchStats {
@@ -49,6 +52,7 @@ impl BenchStats {
             num_errors_sent: sender_stats.num_errors,
             num_errors_recv: listener_stats.num_errors,
             duration: sender_stats.duration,
+            latency: listener_stats.time_last_msg.duration_since(sender_stats.time_last_msg),
         };
     }
 }
@@ -56,7 +60,6 @@ impl BenchStats {
 type FnListen<T> = fn(client: T, duration: Duration) -> Result<ClientStats>;
 type FnSend<T> = fn(client: &T, msg: &String) -> Result<()>;
 type FnInit<T> = fn() -> T;
-
 
 pub fn run_benchmark<T: Send + 'static>(settings: BenchSettings<T>) {
     let time_wait = Duration::from_secs_f64(1. / settings.msgs_per_sec);
@@ -77,20 +80,23 @@ pub fn run_benchmark<T: Send + 'static>(settings: BenchSettings<T>) {
 
     let mut send_stats = ClientStats::new();
     barrier.wait();
+    send_stats.time_last_msg = Instant::now();
+
     while time_start.elapsed() < duration {
         std::thread::sleep(time_wait);
 
         let msg = create_string(settings.message_len);
 
         let s = (settings.fn_send)(&client, &msg);
+        send_stats.time_last_msg = Instant::now();
         if s.is_err() { 
             send_stats.num_errors += 1;
             println!("send error {:?}", s.err());
             continue; 
         }
         send_stats.num += 1;
-        println!("sent: {}", msg);
     }
+
     send_stats.duration = time_start.elapsed();
 
     let listen_stats = listen_handle.join().unwrap().unwrap();

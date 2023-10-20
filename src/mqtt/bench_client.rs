@@ -86,9 +86,11 @@ fn mqtt_listen(client: Client, duration: Duration) -> Result<ClientStats> {
     println!("Waiting for messages..");
 
     let time_start = Instant::now();
+    let mut time_last_msg = Instant::now();
     for msg in rx.iter() {
         if let Some(_req) = msg {
             num_recv += 1;
+            time_last_msg = Instant::now();
         } else if client.is_connected() || !try_reconnect(&client) {
             break;
         } else {
@@ -102,6 +104,7 @@ fn mqtt_listen(client: Client, duration: Duration) -> Result<ClientStats> {
         num: num_recv,
         num_errors,
         duration,
+        time_last_msg,
     });
 }
 
@@ -128,17 +131,18 @@ fn try_reconnect(client: &mqtt::Client) -> bool {
     return false;
 }
 
-fn main() {
+fn main() -> Result<()> {
     let settings = BenchSettings{
         fn_init_send: || mqtt_init("mqtt_req"),
         fn_init_listen: || mqtt_init("mqtt_rsp"),
         fn_send: mqtt_send,
         fn_listen: mqtt_listen,
-        duration: Duration::from_secs(5),
-        msgs_per_sec: 2.,
-        message_len: 10,
+        duration: Duration::from_secs(10),
+        msgs_per_sec: 10000.,
+        message_len: 1000,
         out_file: "data/mqtt.json".to_string(),
     };
 
     run_benchmark(settings);
+    return Ok(());
 }
