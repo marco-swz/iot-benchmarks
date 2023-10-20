@@ -4,11 +4,11 @@ use serde::Serialize;
 
 use anyhow::Result;
 
-pub struct BenchSettings<T: Send + 'static> {
-    pub fn_init_listen: FnInit<T>,
+pub struct BenchSettings<T, U: Send + 'static> {
     pub fn_init_send: FnInit<T>,
+    pub fn_init_listen: FnInit<U>,
     pub fn_send: FnSend<T>,
-    pub fn_listen: FnListen<T>,
+    pub fn_listen: FnListen<U>,
     pub message_len: usize,
     pub duration: Duration,
     pub msgs_per_sec: f64,
@@ -61,7 +61,7 @@ type FnListen<T> = fn(client: T, duration: Duration) -> Result<ClientStats>;
 type FnSend<T> = fn(client: &T, msg: &String) -> Result<()>;
 type FnInit<T> = fn() -> T;
 
-pub fn run_benchmark<T: Send + 'static>(settings: BenchSettings<T>) {
+pub fn run_benchmark<T, U: Send + 'static>(settings: BenchSettings<T, U>) {
     let time_wait = Duration::from_secs_f64(1. / settings.msgs_per_sec);
     let time_start = Instant::now();
     let duration = settings.duration;

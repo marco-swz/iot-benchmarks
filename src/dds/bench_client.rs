@@ -1,76 +1,98 @@
-use rustdds::*;
+use rustdds::{DomainParticipant, CDRSerializerAdapter, CDRDeserializerAdapter, QosPolicyBuilder, TopicKind};
 use rustdds::no_key::{DataWriter, DataReader};
+use rustdds::policy;
+use anyhow::Result;
+use std::time::{Duration, Instant};
+
 #[path="../benchmarker.rs"]
 mod benchmarker;
 
-use benchmarker::{Benchmarker, BenchClient};
+use benchmarker::{ClientStats, BenchSettings};
+use benchmarker::run_benchmark;
 
-struct DdsClient {
-    publisher: DataWriter<String>,
-    subscriber: DataReader<String>,
+fn dds_init_pub() -> DataWriter<String> {
+    let domain_participant = DomainParticipant::new(0).unwrap();
+
+    let qos = QosPolicyBuilder::new()
+      .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
+      .build();
+
+    let publisher = domain_participant.create_publisher(&qos).unwrap();
+
+    let topic = domain_participant
+        .create_topic("dds_rsp".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
+        .unwrap();
+
+    let publisher = publisher
+      .create_datawriter_no_key::<String, CDRSerializerAdapter<String>>(
+        &topic,
+        None)
+      .unwrap();
+
+    return publisher;
 }
 
-impl DdsClient {
-    fn new() -> Self {
-        let domain_participant = DomainParticipant::new(0).unwrap();
+fn dds_init_sub() -> DataReader<String> {
+    let domain_participant = DomainParticipant::new(0).unwrap();
 
-        let qos = QosPolicyBuilder::new()
-          .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
-          .build();
+    let qos = QosPolicyBuilder::new()
+      .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
+      .build();
 
-        let subscriber = domain_participant.create_subscriber(&qos).unwrap();
+    let subscriber = domain_participant.create_subscriber(&qos).unwrap();
 
-        let topic_req = domain_participant
-            .create_topic("dds_req".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
-            .unwrap();
+    let topic = domain_participant
+        .create_topic("dds_req".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
+        .unwrap();
 
-        let subscriber = subscriber
-            .create_datareader_no_key::<String, CDRDeserializerAdapter<String>>(
-                &topic_req, 
-                None)
-            .unwrap();
-
-        let publisher = domain_participant.create_publisher(&qos).unwrap();
-
-        let topic_rsp = domain_participant
-            .create_topic("dds_rsp".to_string(), "JustAString".to_string(), &qos, TopicKind::NoKey)
-            .unwrap();
-
-        let publisher = publisher
-          .create_datawriter_no_key::<String, CDRSerializerAdapter<String>>(
-            &topic_rsp,
+    let subscriber = subscriber
+        .create_datareader_no_key::<String, CDRDeserializerAdapter<String>>(
+            &topic, 
             None)
-          .unwrap();
+        .unwrap();
 
-        return DdsClient{
-            publisher,
-            subscriber,
-        }
-    }
+    return subscriber;
 }
 
-impl BenchClient for DdsClient {
-    fn send(&self, msg: &String) -> anyhow::Result<()> {
-        return Ok(self.publisher.write(msg.to_string(), None)?);
-    }
+fn dds_send(publisher: &DataWriter<String>, msg: &String) -> Result<()> {
+        return Ok(publisher.write(msg.to_string(), None)?);
+}
 
-    fn wait_for_response(&mut self) -> anyhow::Result<String> {
-        loop {
-            match self.subscriber.take_next_sample() {
-                Ok(Some(msg)) => return Ok(msg.value().to_string()),
-                Err(e) => return Err(e.into()),
-                _ => (),
-            };
-        } 
+fn dds_listen(mut subscriber: DataReader<String>, duration: Duration) -> Result<ClientStats> {
+    let (mut num_recv, mut num_errors) = (0, 0);
 
-    }
+    let mut time_last_msg = Instant::now();
+    let time_start = Instant::now();
+    while time_start.elapsed() < duration {
+        match subscriber.take_next_sample() {
+            Ok(Some(_msg)) => {
+                num_recv += 1;
+                time_last_msg = Instant::now();
+            },
+            Err(_) => num_errors += 1,
+            _ => (),
+        };
+    } 
+
+    return Ok(ClientStats{
+        num: num_recv,
+        num_errors,
+        time_last_msg,
+        duration: time_start.elapsed(),
+    });
 }
 
 fn main() {
-    let mut bench = Benchmarker::new(
-        Box::new(DdsClient::new())
-    );
+    let settings = BenchSettings{
+        fn_init_send: dds_init_pub,
+        fn_init_listen: dds_init_sub,
+        fn_send: dds_send,
+        fn_listen: dds_listen,
+        duration: Duration::from_secs(5),
+        msgs_per_sec: 1.,
+        message_len: 10,
+        out_file: "data/dds.json".to_string(),
+    };
 
-    bench.run(4, 5., 5);
-
+    run_benchmark(settings);
 }
