@@ -1,0 +1,14 @@
+{
+  "num_sent": 0,
+  "num_received": 0,
+  "num_errors_sent": 5,
+  "num_errors_recv": 0,
+  "duration": {
+    "secs": 5,
+    "nanos": 5457483
+  },
+  "latency": {
+    "secs": 0,
+    "nanos": 0
+  }
+}

@@ -19,6 +19,10 @@ path = "src/mqtt/echo_client.rs"
 name = "mqtt-bench"
 path = "src/mqtt/bench_client.rs"
 
+[[bin]]
+name = "ros2-echo"
+path = "src/ros2/echo_client.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 mio = "0.8.8"
@@ -27,6 +31,8 @@ paho-mqtt = "0.12.2"
 ctrlc = "3.4.1"
 serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
+r2r = "0.7.0"
+futures = "0.3.28"
 #chrono = "0.4"
 #log = "0.4"
 
