@@ -23,6 +23,10 @@ path = "src/mqtt/bench_client.rs"
 name = "ros2-echo"
 path = "src/ros2/echo_client.rs"
 
+[[bin]]
+name = "ros2-bench"
+path = "src/ros2/bench_client.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 mio = "0.8.8"

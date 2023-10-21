@@ -58,7 +58,7 @@ impl BenchStats {
 }
 
 type FnListen<T> = fn(client: T, duration: Duration) -> Result<ClientStats>;
-type FnSend<T> = fn(client: &T, msg: &String) -> Result<()>;
+type FnSend<T> = fn(client: &T, msg: String) -> Result<()>;
 type FnInit<T> = fn() -> T;
 
 pub fn run_benchmark<T, U: Send + 'static>(settings: BenchSettings<T, U>) {
@@ -87,7 +87,7 @@ pub fn run_benchmark<T, U: Send + 'static>(settings: BenchSettings<T, U>) {
 
         let msg = create_string(settings.message_len);
 
-        let s = (settings.fn_send)(&client, &msg);
+        let s = (settings.fn_send)(&client, msg);
         send_stats.time_last_msg = Instant::now();
         if s.is_err() { 
             send_stats.num_errors += 1;

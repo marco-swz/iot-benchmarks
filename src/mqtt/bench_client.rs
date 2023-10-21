@@ -108,7 +108,7 @@ fn mqtt_listen(client: Client, duration: Duration) -> Result<ClientStats> {
     });
 }
 
-fn mqtt_send(client: &Client, msg: &String) -> Result<()> {
+fn mqtt_send(client: &Client, msg: String) -> Result<()> {
     let rsp = mqtt::MessageBuilder::new()
         .topic("mqtt_req")
         .payload(msg.as_str())

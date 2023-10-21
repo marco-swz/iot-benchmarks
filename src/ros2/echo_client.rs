@@ -14,8 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pool = LocalPool::new();
     let spawner = pool.spawner();
 
-    let publisher = node.create_publisher::<r2r::std_msgs::msg::String>(topic_rsp, QosProfile::default())?;
-    let subscriber = node.subscribe::<r2r::std_msgs::msg::String>(topic_req, QosProfile::default())?;
+    let publisher = node.create_publisher::<r2r::std_msgs::msg::String>(topic_req, QosProfile::default())?;
+    let subscriber = node.subscribe::<r2r::std_msgs::msg::String>(topic_rsp, QosProfile::default())?;
 
     spawner.spawn_local(async move {
         subscriber.for_each(|msg| {

@@ -54,7 +54,7 @@ fn dds_init_sub() -> DataReader<String> {
     return subscriber;
 }
 
-fn dds_send(publisher: &DataWriter<String>, msg: &String) -> Result<()> {
+fn dds_send(publisher: &DataWriter<String>, msg: String) -> Result<()> {
         return Ok(publisher.write(msg.to_string(), None)?);
 }
 
