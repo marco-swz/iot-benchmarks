@@ -73,7 +73,7 @@ pub fn run_benchmark<T, U: Send + 'static>(settings: BenchSettings<T, U>) {
     let listen_handle = std::thread::spawn(move || {
         let client = (settings.fn_init_listen)();
         barrier_clone.wait();
-        return (settings.fn_listen)(client, duration);
+        return (settings.fn_listen)(client, duration+Duration::from_secs(5));
     });
 
     let client = (settings.fn_init_send)();

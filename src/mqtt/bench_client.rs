@@ -76,7 +76,7 @@ fn mqtt_listen(client: Client, duration: Duration) -> Result<ClientStats> {
     // Automatically exit after duration + 5sec
     let exit_client = client.clone();
     let _ = std::thread::spawn(move || {
-        std::thread::sleep(duration + Duration::from_secs(5));
+        std::thread::sleep(duration);
         exit_client.stop_consuming();
     });
 
