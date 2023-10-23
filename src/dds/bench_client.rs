@@ -3,6 +3,7 @@ use rustdds::no_key::{DataWriter, DataReader};
 use rustdds::policy;
 use anyhow::Result;
 use std::time::{Duration, Instant};
+use mio::{Events, Interest, Poll, Token};
 
 #[path="../benchmarker.rs"]
 mod benchmarker;
@@ -10,8 +11,8 @@ mod benchmarker;
 use benchmarker::{ClientStats, BenchSettings};
 use benchmarker::run_benchmark;
 
-fn dds_init_pub() -> DataWriter<String> {
-    let domain_participant = DomainParticipant::new(0).unwrap();
+fn dds_init_pub() -> (DataWriter<String>, DomainParticipant) {
+    let domain_participant = DomainParticipant::new(1).unwrap();
 
     let qos = QosPolicyBuilder::new()
       .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
@@ -29,11 +30,11 @@ fn dds_init_pub() -> DataWriter<String> {
         None)
       .unwrap();
 
-    return publisher;
+    return (publisher, domain_participant);
 }
 
-fn dds_init_sub() -> DataReader<String> {
-    let domain_participant = DomainParticipant::new(0).unwrap();
+fn dds_init_sub() -> (DataReader<String>, DomainParticipant) {
+    let domain_participant = DomainParticipant::new(2).unwrap();
 
     let qos = QosPolicyBuilder::new()
       .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
@@ -51,28 +52,80 @@ fn dds_init_sub() -> DataReader<String> {
             None)
         .unwrap();
 
-    return subscriber;
+    return (subscriber, domain_participant);
 }
 
-fn dds_send(publisher: &DataWriter<String>, msg: String) -> Result<()> {
-        return Ok(publisher.write(msg.to_string(), None)?);
+fn dds_send(pub_part: &(DataWriter<String>, DomainParticipant), msg: String) -> Result<()> {
+    let (publisher, _) = pub_part;
+    println!("publ");
+    return Ok(publisher.write(msg.to_string(), None)?);
 }
 
-fn dds_listen(mut subscriber: DataReader<String>, duration: Duration) -> Result<ClientStats> {
+fn dds_listen(sub_part: (DataReader<String>, DomainParticipant), duration: Duration) -> Result<ClientStats> {
+    let (mut subscriber, _) = sub_part;
     let (mut num_recv, mut num_errors) = (0, 0);
 
     let mut time_last_msg = Instant::now();
     let time_start = Instant::now();
-    while time_start.elapsed() < duration {
-        match subscriber.take_next_sample() {
-            Ok(Some(_msg)) => {
-                num_recv += 1;
-                time_last_msg = Instant::now();
-            },
-            Err(_) => num_errors += 1,
-            _ => (),
-        };
-    } 
+    //while time_start.elapsed() < duration {
+    //    match subscriber.take_next_sample() {
+    //        Ok(Some(_msg)) => {
+    //            println!("listen");
+    //            num_recv += 1;
+    //            time_last_msg = Instant::now();
+    //        },
+    //        Err(_) => num_errors += 1,
+    //        _ => (),
+    //    };
+    //} 
+    const SUB_READY: Token = Token(1);
+    const SUB_STATUS_READY: Token = Token(2);
+
+    let mut poll = Poll::new().unwrap();
+    let mut events = Events::with_capacity(5);
+
+    poll.registry()
+        .register(&mut subscriber, SUB_READY, Interest::READABLE)
+        .unwrap();
+
+    //poll.registry()
+    //    .register(
+    //        sub.as_status_source(),
+    //        SUB_STATUS_READY,
+    //        Interest::READABLE,
+    //    )
+    //    .unwrap();
+
+    loop {
+        
+        if let Err(e) = poll.poll(&mut events, Some(std::time::Duration::from_millis(200))) {
+            println!("Poll error {e}");
+        }
+
+        for event in &events {
+            match event.token() {
+                SUB_READY => {
+                    loop {
+                        println!("DataReader triggered");
+                        match subscriber.take_next_sample() {
+                            Ok(Some(sample)) => {
+                                println!("recv");
+                                num_recv += 1;
+                            },
+                            Ok(None) => break, // no more data
+                            Err(e) => println!("DataReader error: {e:?}")
+                        } 
+                    }
+                },
+                //SUB_STATUS_READY => {
+                //    while let Some(status) = subscriber.try_recv_status() {
+                //        println!("DataReader status: {status:?}");
+                //    }
+                //},
+                Token(_) => (),
+            } // match token
+        } // for
+    }
 
     return Ok(ClientStats{
         num: num_recv,

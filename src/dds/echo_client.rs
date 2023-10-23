@@ -63,6 +63,7 @@ fn main() {
                         println!("DataReader triggered");
                         match sub.take_next_sample() {
                             Ok(Some(sample)) => {
+                                println!("recv");
                                 publ.write(sample.into_value(), None).unwrap();
                             },
                             Ok(None) => break, // no more data
