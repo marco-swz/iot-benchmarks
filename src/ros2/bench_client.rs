@@ -75,7 +75,7 @@ fn ros2_init_pub() -> (Publisher<msg::String>, Node) {
     return (publisher, node);
 }
 
-fn ros2_send(publ: &(Publisher<msg::String>, Node), message: String) -> Result<()> {
+fn ros2_send(publ: &mut (Publisher<msg::String>, Node), message: String) -> Result<()> {
     let (publisher, _node) = publ;
     let message = msg::String{ data: message };
     return Ok(publisher.publish(&message)?);

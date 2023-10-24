@@ -55,7 +55,7 @@ fn dds_init_sub() -> (DataReader<String>, DomainParticipant) {
     return (subscriber, domain_participant);
 }
 
-fn dds_send(pub_part: &(DataWriter<String>, DomainParticipant), msg: String) -> Result<()> {
+fn dds_send(pub_part: &mut (DataWriter<String>, DomainParticipant), msg: String) -> Result<()> {
     let (publisher, _) = pub_part;
     println!("publ");
     return Ok(publisher.write(msg.to_string(), None)?);
