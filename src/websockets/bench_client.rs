@@ -6,8 +6,7 @@ use anyhow::Result;
 #[path="../benchmarker.rs"]
 mod benchmarker;
 
-use benchmarker::{ClientStats, BenchSettings};
-use benchmarker::run_benchmark;
+use benchmarker::{Benchmarker, Sender, Receiver, MsgType};
 
 type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
 
@@ -26,9 +25,79 @@ fn socket_init() -> Socket {
     return socket;
 }
 
-fn socket_send(socket: &mut Socket, msg: String) -> Result<()> {
-    return Ok(socket.send(Message::Text(msg))?);
+struct WsSender {
+    socket: Socket,
 }
+
+impl WsSender {
+    pub fn new() -> Self {
+        let (socket, response) =
+            connect("ws://localhost:9001/socket").expect("Can't connect");
+
+        println!("Connected to the server");
+        println!("Response HTTP code: {}", response.status());
+        println!("Response contains the following headers:");
+        for (ref header, _value) in response.headers() {
+            println!("* {}", header);
+        }
+
+        Self{
+            socket
+        }
+    }
+}
+
+impl Sender for WsSender {
+    fn send(&mut self, msg: MsgType) -> Result<()> {
+        self.socket.send(Message::Binary(msg))?;
+        Ok(())
+    }
+}
+
+struct WsReceiver {
+    socket: Socket,
+}
+
+impl WsReceiver {
+    pub fn new() -> Self {
+        let (socket, response) =
+            connect("ws://localhost:9002/socket").expect("Can't connect");
+
+        println!("Connected to the server");
+        println!("Response HTTP code: {}", response.status());
+        println!("Response contains the following headers:");
+        for (ref header, _value) in response.headers() {
+            println!("* {}", header);
+        }
+
+        Self{
+            socket
+        }
+    }
+}
+
+impl Receiver for WsReceiver {
+    fn listen(&mut self, rx_stop: std::sync::mpsc::Receiver<()>) -> Result<Vec<Option<Instant>>> {
+        let mut num_recv = 0; let mut num_errors = 0;
+        let mut time_last_msg = Instant::now();
+
+        while time_start.elapsed() < duration {
+            // TODO: Find a way to stop (read is blocking)
+            let Ok(msg) = socket.read() else {
+                println!("Recv error");
+                num_errors += 1;
+                continue;
+            };
+            time_last_msg = Instant::now();
+            num_recv += 1;
+            println!("Received: {}", msg);
+        }
+
+        socket.close(None).unwrap();
+            todo!()
+        }
+}
+
 
 fn socket_listen(mut socket: Socket, duration: Duration) -> Result<ClientStats> {
     let mut num_recv = 0; let mut num_errors = 0;

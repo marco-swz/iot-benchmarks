@@ -1,38 +1,9 @@
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Barrier};
-use serde::Serialize;
-
 use anyhow::Result;
+use serde::Serialize;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
-pub struct BenchSettings<T, U: Send + 'static> {
-    pub fn_init_send: FnInit<T>,
-    pub fn_init_listen: FnInit<U>,
-    pub fn_send: FnSend<T>,
-    pub fn_listen: FnListen<U>,
-    pub message_len: usize,
-    pub duration: Duration,
-    pub msgs_per_sec: f64,
-    pub out_file: String,
-}
-
-#[derive(Debug)]
-pub struct ClientStats {
-    pub num: usize,
-    pub num_errors: usize,
-    pub duration: Duration,
-    pub time_last_msg: Instant,
-}
-
-impl ClientStats {
-    fn new() -> Self {
-        return Self{
-            num: 0,
-            num_errors: 0,
-            duration: Duration::from_secs(0),
-            time_last_msg: Instant::now(),
-        };
-    }
-}
+type MsgType = Vec<u8>;
 
 #[derive(Debug, Serialize)]
 struct BenchStats {
@@ -44,71 +15,91 @@ struct BenchStats {
     pub latency: Duration,
 }
 
-impl BenchStats {
-    fn new(sender_stats: ClientStats, listener_stats: ClientStats) -> Self {
-        return BenchStats {
-            num_sent: sender_stats.num,
-            num_received: listener_stats.num,
-            num_errors_sent: sender_stats.num_errors,
-            num_errors_recv: listener_stats.num_errors,
-            duration: sender_stats.duration,
-            latency: listener_stats.time_last_msg.duration_since(sender_stats.time_last_msg),
-        };
-    }
+//impl BenchStats {
+//    fn new(sender_stats: ClientStats, listener_stats: ClientStats) -> Self {
+//        return BenchStats {
+//            num_sent: sender_stats.num,
+//            num_received: listener_stats.num,
+//            num_errors_sent: sender_stats.num_errors,
+//            num_errors_recv: listener_stats.num_errors,
+//            duration: sender_stats.duration,
+//            latency: listener_stats.time_last_msg.duration_since(sender_stats.time_last_msg),
+//        };
+//    }
+//}
+
+pub trait Sender {
+    fn send(&mut self, msg: MsgType) -> Result<()>;
 }
 
-type FnListen<T> = fn(client: T, duration: Duration) -> Result<ClientStats>;
-type FnSend<T> = fn(client: &mut T, msg: String) -> Result<()>;
-type FnInit<T> = fn() -> T;
+pub trait Receiver {
+    fn listen(&mut self, rx_stop: mpsc::Receiver<()>) -> Result<Vec<Option<Instant>>>;
+}
 
-pub fn run_benchmark<T, U: Send + 'static>(settings: BenchSettings<T, U>) {
-    let time_wait = Duration::from_secs_f64(1. / settings.msgs_per_sec);
-    let time_start = Instant::now();
-    let duration = settings.duration;
+pub struct Benchmarker {
+    pub num_messages: usize,
+    pub out_file: Option<String>,
+    time_wait: Duration,
+    stats: Option<BenchStats>,
+}
 
-    // Make sure all clients are initialized before starting
-    let barrier = Arc::new(Barrier::new(1));
-    let barrier_clone = Arc::clone(&barrier);
-
-    let listen_handle = std::thread::spawn(move || {
-        let client = (settings.fn_init_listen)();
-        barrier_clone.wait();
-        return (settings.fn_listen)(client, duration+Duration::from_secs(5));
-    });
-
-    let mut client = (settings.fn_init_send)();
-
-    let mut send_stats = ClientStats::new();
-    barrier.wait();
-    send_stats.time_last_msg = Instant::now();
-
-    while time_start.elapsed() < duration {
-        std::thread::sleep(time_wait);
-
-        let msg = create_string(settings.message_len);
-
-        let s = (settings.fn_send)(&mut client, msg);
-        send_stats.time_last_msg = Instant::now();
-        if s.is_err() { 
-            send_stats.num_errors += 1;
-            println!("send error {:?}", s.err());
-            continue; 
+impl Benchmarker {
+    pub fn new(msgs_per_sec: f64, num_messages: usize) -> Self {
+        Benchmarker {
+            time_wait: Duration::from_secs_f64(1. / msgs_per_sec),
+            num_messages,
+            out_file: None,
+            stats: None,
         }
-        send_stats.num += 1;
     }
 
-    send_stats.duration = time_start.elapsed();
+    pub fn run(&self, mut sender: impl Sender, mut receiver: impl Receiver + Send + 'static) {
+        let msg_length = 10;
+        let (tx_stop, rx_stop) = mpsc::channel();
 
-    let listen_stats = listen_handle.join().unwrap().unwrap();
+        let listen_handle = std::thread::spawn(move || {
+            let recv_times = receiver.listen(rx_stop);
+            return recv_times;
+        });
 
-    let stats = BenchStats::new(send_stats, listen_stats);
-    println!("{:?}", stats);
+        let mut send_times = Vec::with_capacity(self.num_messages);
+        for msg_nr in 0..self.num_messages {
+            let msg = create_message(msg_nr, msg_length);
 
-    let mut file = std::fs::File::create(settings.out_file).unwrap();
-    serde_json::to_writer_pretty(&mut file, &stats).unwrap();
+            let time_send = Instant::now();
+            send_times.push(time_send);
+            let res_send = sender.send(msg);
+
+            std::thread::sleep(self.time_wait);
+        }
+
+        tx_stop.send(());
+        let recv_times = listen_handle.join().unwrap().unwrap();
+
+        //let stats = BenchStats::new(send_times, recv_times);
+
+        for i in 0..send_times.len() {
+            let send_time = send_times.get(i).unwrap();
+            let recv_time = recv_times.get(i);
+
+            let Some(Some(recv_time)) = recv_time else {
+                continue;
+            };
+
+            println!("{:?}", recv_time.duration_since(*send_time).as_secs_f64());
+        }
+
+        //let mut file = std::fs::File::create(settings.out_file).unwrap();
+        //serde_json::to_writer_pretty(&mut file, &stats).unwrap();
+    }
 }
 
-fn create_string(length: usize) -> String {
+fn create_message(msg_nr: usize, length: usize) -> Vec<u8> {
+    let mut msg = Vec::from(msg_nr.to_ne_bytes());
+
     let string = "a".repeat(length);
-    return string;
+    let mut padding = Vec::from(string.as_bytes());
+    msg.append(&mut padding);
+
+    return msg;
 }
