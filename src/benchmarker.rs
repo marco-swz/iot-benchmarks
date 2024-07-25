@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-type MsgType = Vec<u8>;
+pub type MsgType = Vec<u8>;
 
 #[derive(Debug, Serialize)]
 struct BenchStats {
@@ -68,12 +68,14 @@ impl Benchmarker {
 
             let time_send = Instant::now();
             send_times.push(time_send);
-            let res_send = sender.send(msg);
+            let _ = sender.send(msg);
 
             std::thread::sleep(self.time_wait);
         }
 
-        tx_stop.send(());
+        println!("pre");
+        tx_stop.send(()).unwrap();
+        println!("past");
         let recv_times = listen_handle.join().unwrap().unwrap();
 
         //let stats = BenchStats::new(send_times, recv_times);

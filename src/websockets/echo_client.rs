@@ -3,8 +3,8 @@ use std::thread::spawn;
 use tungstenite::accept;
 
 fn main () {
-    let server = TcpListener::bind("127.0.0.1:9001").unwrap();
-    for stream in server.incoming() {
+    let server_recv = TcpListener::bind("127.0.0.1:9001").unwrap();
+    for stream in server_recv.incoming() {
         spawn (move || {
             let mut websocket = accept(stream.unwrap()).unwrap();
             loop {
