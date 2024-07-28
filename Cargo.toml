@@ -35,6 +35,14 @@ path = "src/websockets/echo_client.rs"
 name = "websocket-bench"
 path = "src/websockets/bench_client.rs"
 
+[[bin]]
+name = "tcp-bench"
+path = "src/tcp/bench_client.rs"
+
+[[bin]]
+name = "tcp-echo"
+path = "src/tcp/echo_client.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 mio = "0.8.8"
@@ -46,6 +54,7 @@ serde_json = "1.0.107"
 r2r = "0.7.0"
 futures = "0.3.28"
 tungstenite = "0.20.1"
+hdrhistogram = "7.5.4"
 #chrono = "0.4"
 #log = "0.4"
 

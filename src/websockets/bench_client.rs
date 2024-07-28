@@ -1,4 +1,4 @@
-use std::net::TcpStream;
+use std::{net::TcpStream, time::Duration};
 use tungstenite::{connect, Message, WebSocket, stream::MaybeTlsStream};
 use std::time::Instant;
 use anyhow::Result;
@@ -39,13 +39,21 @@ impl Sender for WsSender {
     }
 }
 
+impl Drop for WsSender {
+    fn drop(&mut self) {
+        let _ = self.socket.close(None);
+        let _ = self.socket.flush();
+    }
+}
+
 struct WsReceiver {
     socket: Socket,
     num_messages: usize,
+    duration: Duration,
 }
 
 impl WsReceiver {
-    pub fn new(num_messages: usize) -> Self {
+    pub fn new(num_messages: usize, duration: Duration) -> Self {
         let (socket, response) =
             connect("ws://localhost:9001/socket").expect("Can't connect");
 
@@ -59,24 +67,35 @@ impl WsReceiver {
         Self{
             socket,
             num_messages,
+            duration
         }
     }
 }
 
 impl Receiver for WsReceiver {
-    fn listen(&mut self, rx_stop: std::sync::mpsc::Receiver<()>) -> Result<Vec<Option<Instant>>> {
+    fn listen(&mut self) -> Result<Vec<Option<Instant>>> {
         let mut msgs = vec![None; self.num_messages];
 
+        let mut num_received = 0;
+        let time_start = Instant::now();
         loop {
-            match rx_stop.try_recv() {
-                Ok(_) => break,
-                Err(_) => (),
-            };
+            if num_received == self.num_messages {
+                break;
+            }
+
+            if time_start.elapsed() > self.duration + Duration::from_secs(5) {
+                break;
+            }
 
             // `read` will return if connection is closed
             let Ok(msg) = self.socket.read() else {
+                dbg!("err");
                 continue;
             };
+
+            num_received += 1;
+
+            dbg!(&msg);
 
             let Ok(idx) = index_from_message(msg.into_data()) else {
                 continue;
@@ -98,9 +117,10 @@ fn index_from_message(msg: MsgType) -> Result<usize> {
 
 fn main() {
     let num_messages = 10;
+    let duration = Duration::from_secs(5);
     let send = WsSender::new();
-    let recv = WsReceiver::new(num_messages);
-    let bench = Benchmarker::new(2., num_messages);
+    let recv = WsReceiver::new(num_messages, duration);
+    let bench = Benchmarker::new(num_messages, duration);
 
     bench.run(send, recv);
 }
