@@ -1,6 +1,5 @@
 use anyhow::Result;
 use std::io::prelude::*;
-use std::net::Shutdown;
 use std::time::Instant;
 use std::{net::TcpStream, time::Duration};
 
