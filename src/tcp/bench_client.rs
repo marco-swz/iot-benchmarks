@@ -86,10 +86,17 @@ impl Receiver for WsReceiver {
 }
 
 fn main() {
-    let num_messages = 120000;
-    let duration = Duration::from_secs(5);
-    let stream = TcpStream::connect("127.0.0.1:9001").unwrap();
-    let message_size = 5 + 8;
+    let args: Vec<String> = std::env::args()
+        .collect();
+
+    let addr_default = "localhost:9001".to_string();
+    let addr = args.get(1).unwrap_or(&addr_default).to_string();
+    let num_messages = args.get(2).unwrap_or(&"10".to_string()).parse().unwrap();
+    let duration = Duration::from_secs(args.get(3).unwrap_or(&"5".to_string()).parse().unwrap());
+    let mut message_size = args.get(4).unwrap_or(&"10".to_string()).parse().unwrap();
+
+    let stream = TcpStream::connect(addr).unwrap();
+    message_size += 8;
     stream.set_nonblocking(true).unwrap();
     println!("connected");
 

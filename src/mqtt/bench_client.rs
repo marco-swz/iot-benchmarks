@@ -67,6 +67,7 @@ impl Receiver for WsReceiver {
                 continue;
             };
 
+            dbg!(&msg);
             let Some(msg) = msg else {
                 if self.client.is_connected() || !try_reconnect(&self.client) {
                     break;
@@ -96,8 +97,8 @@ impl Receiver for WsReceiver {
 }
 
 
-fn mqtt_init(topic: &str) -> Client {
-    let host = "mqtt://localhost:1883".to_string();
+fn mqtt_init(addr: &str, topic: &str) -> Client {
+    let host = format!("mqtt://{addr}");
     println!("Connecting to MQTT broker at {}", host);
 
     let opts = mqtt::CreateOptionsBuilder::new()
@@ -166,13 +167,21 @@ fn try_reconnect(client: &mqtt::Client) -> bool {
 }
 
 fn main() {
-    let num_messages = 120000;
-    let duration = Duration::from_secs(5);
-    let client = mqtt_init("mqtt_bench");
-    let message_size = 5 + 8;
+    let args: Vec<String> = std::env::args()
+        .collect();
 
-    let send = WsSender::new(client.clone());
-    let recv = WsReceiver::new(client, num_messages, duration);
+    let addr_default = "localhost:1883".to_string();
+    let addr = args.get(1).unwrap_or(&addr_default).to_string();
+    let num_messages = args.get(2).unwrap_or(&"10".to_string()).parse().unwrap();
+    let duration = Duration::from_secs(args.get(3).unwrap_or(&"5".to_string()).parse().unwrap());
+    let mut message_size = args.get(4).unwrap_or(&"10".to_string()).parse().unwrap();
+
+    let client_send = mqtt_init(&addr, &"mqtt_req");
+    let client_recv = mqtt_init(&addr, &"mqtt_rsp");
+    message_size += 8;
+
+    let send = WsSender::new(client_send);
+    let recv = WsReceiver::new(client_recv, num_messages, duration);
     let mut bench = Benchmarker::new(num_messages, duration, message_size);
 
     bench.run(send, recv);

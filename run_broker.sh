@@ -1,1 +1,1 @@
-docker run --rm -p 1883:1883 mqtt
+mosquitto -p 1883 -c mosquitto.conf

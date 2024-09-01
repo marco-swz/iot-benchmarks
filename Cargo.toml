@@ -43,6 +43,14 @@ path = "src/tcp/bench_client.rs"
 name = "tcp-echo"
 path = "src/tcp/echo_client.rs"
 
+[[bin]]
+name = "opcua-echo"
+path = "src/opcua/echo_server.rs"
+
+[[bin]]
+name = "opcua-bench"
+path = "src/opcua/bench_client.rs"
+
 [dependencies]
 anyhow = "1.0.75"
 mio = "0.8.8"
@@ -55,6 +63,7 @@ r2r = "0.7.0"
 futures = "0.3.28"
 tungstenite = "0.20.1"
 hdrhistogram = "7.5.4"
+opcua = "0.12.0"
 #chrono = "0.4"
 #log = "0.4"
 

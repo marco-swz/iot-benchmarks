@@ -30,6 +30,8 @@
                         openssl.dev
                         rosPackages.humble.ros-core
                         colcon
+                        mosquitto
+                        opcua-client-gui
                         #llvmPackages_16.clang-unwrapped
                     ];
 

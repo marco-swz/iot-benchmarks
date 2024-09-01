@@ -15,7 +15,11 @@ fn try_reconnect(client: &mqtt::Client) -> bool {
 }
 
 fn main() -> Result<()> {
-    let host = "mqtt://localhost:1883".to_string();
+    let args: Vec<String> = std::env::args().collect();
+    let addr_default = "localhost:1883".to_string();
+    let addr = args.get(1).unwrap_or(&addr_default);
+
+    let host = format!("mqtt://{addr}");
     println!("Connecting to MQTT broker at {}", host);
 
     let opts = mqtt::CreateOptionsBuilder::new()
