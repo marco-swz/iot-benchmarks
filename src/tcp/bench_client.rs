@@ -5,8 +5,11 @@ use std::{net::TcpStream, time::Duration};
 
 #[path = "../benchmarker.rs"]
 mod benchmarker;
-
 use benchmarker::{index_from_message, Benchmarker, MsgType, Receiver, Sender};
+
+#[path = "../config.rs"]
+mod config;
+use config::Config;
 
 struct WsSender {
     stream: TcpStream,
@@ -85,24 +88,39 @@ impl Receiver for WsReceiver {
     }
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args()
-        .collect();
-
-    let addr_default = "localhost:9001".to_string();
-    let addr = args.get(1).unwrap_or(&addr_default).to_string();
-    let num_messages = args.get(2).unwrap_or(&"10".to_string()).parse().unwrap();
-    let duration = Duration::from_secs(args.get(3).unwrap_or(&"5".to_string()).parse().unwrap());
-    let mut message_size = args.get(4).unwrap_or(&"10".to_string()).parse().unwrap();
-
+fn run_bench(addr: &String, num_messages: usize, duration: Duration, message_size: usize) {
     let stream = TcpStream::connect(addr).unwrap();
-    message_size += 8;
+    // Increase size to add  message number
+    let message_size = message_size + 8;
     stream.set_nonblocking(true).unwrap();
     println!("connected");
 
     let send = WsSender::new(stream.try_clone().unwrap());
-    let recv = WsReceiver::new(stream, num_messages, duration, message_size);
+    let recv = WsReceiver::new(stream.try_clone().unwrap(), num_messages, duration, message_size);
     let mut bench = Benchmarker::new(num_messages, duration, message_size);
 
-    bench.run(send, recv);
+    let stats = bench.run(send, recv);
+    dbg!(&stats);
+    //stream.shutdown(std::net::Shutdown::Both).unwrap();
+}
+
+fn main() {
+    let config: Config = toml::from_str(
+        &std::fs::read_to_string("config.toml").unwrap()
+    ).unwrap();
+
+    let schedule = config.tcp.schedule;
+
+    let step = (schedule.stop_req_per_sec - schedule.start_req_per_sec) / schedule.steps as f64;
+    for i in 0..schedule.steps {
+        let duration = Duration::from_secs(schedule.secs_per_step);
+        let num_messages = (schedule.start_req_per_sec * i as f64 + step) * schedule.secs_per_step as f64;
+
+        run_bench(
+            &config.tcp.address,
+            num_messages.floor() as usize, 
+            duration, 
+            config.tcp.message_size,
+        );
+    }
 }

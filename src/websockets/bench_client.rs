@@ -5,8 +5,11 @@ use anyhow::Result;
 
 #[path="../benchmarker.rs"]
 mod benchmarker;
+use benchmarker::{Benchmarker, Sender, Receiver, MsgType, index_from_message};
 
-use benchmarker::{Benchmarker, Sender, Receiver, MsgType};
+#[path="../config.rs"]
+mod config;
+use config::Config;
 
 type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
 
@@ -15,9 +18,9 @@ struct WsSender {
 }
 
 impl WsSender {
-    pub fn new() -> Self {
+    pub fn new(addr: &String) -> Self {
         let (socket, response) =
-            connect("ws://localhost:9001/socket").expect("Can't connect");
+            connect(addr).expect("Can't connect");
 
         println!("Connected to the server");
         println!("Response HTTP code: {}", response.status());
@@ -53,9 +56,9 @@ struct WsReceiver {
 }
 
 impl WsReceiver {
-    pub fn new(num_messages: usize, duration: Duration) -> Self {
+    pub fn new(addr: &String, num_messages: usize, duration: Duration) -> Self {
         let (socket, response) =
-            connect("ws://localhost:9001/socket").expect("Can't connect");
+            connect(addr).expect("Can't connect");
 
         println!("Connected to the server");
         println!("Response HTTP code: {}", response.status());
@@ -110,17 +113,31 @@ impl Receiver for WsReceiver {
     }
 }
 
-fn index_from_message(msg: MsgType) -> Result<usize> {
-    let idx: [u8; 8] = msg[..8].try_into()?;
-    return Ok(usize::from_ne_bytes(idx));
+fn run_bench(addr: &String, num_messages: usize, duration: Duration, message_size: usize) {
+    let send = WsSender::new(addr);
+    let recv = WsReceiver::new(addr, num_messages, duration);
+    let mut bench = Benchmarker::new(num_messages, duration, message_size);
+
+    bench.run(send, recv);
 }
 
 fn main() {
-    let num_messages = 10;
-    let duration = Duration::from_secs(5);
-    let send = WsSender::new();
-    let recv = WsReceiver::new(num_messages, duration);
-    let bench = Benchmarker::new(num_messages, duration);
+    let config: Config = toml::from_str(
+        &std::fs::read_to_string("config.toml").unwrap()
+    ).unwrap();
 
-    bench.run(send, recv);
+    let schedule = config.websocket.schedule;
+
+    let step = (schedule.stop_req_per_sec - schedule.start_req_per_sec) / schedule.steps as f64;
+    for i in 0..schedule.steps {
+        let duration = Duration::from_secs(schedule.secs_per_step);
+        let num_messages = (schedule.start_req_per_sec * i as f64 + step) * schedule.secs_per_step as f64;
+
+        run_bench(
+            &config.websocket.address,
+            num_messages.floor() as usize, 
+            duration, 
+            config.websocket.message_size,
+        );
+    }
 }

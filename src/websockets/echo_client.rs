@@ -8,10 +8,11 @@ fn main () {
         spawn (move || {
             let mut websocket = accept(stream.unwrap()).unwrap();
             loop {
-                let Ok(msg) = websocket.read() else {
-                    println!("Read error");
-                    break;
-                };
+                //let Ok(msg) = websocket.read() else {
+                //    println!("Read error");
+                //    break;
+                //};
+                let msg = websocket.read().unwrap();
 
                 // We do not want to send back ping/pong messages.
                 if msg.is_binary() || msg.is_text() {

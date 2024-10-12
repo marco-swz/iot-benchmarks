@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde::Serialize;
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use anyhow::anyhow;
 use hdrhistogram::Histogram;
@@ -8,11 +7,12 @@ use hdrhistogram::Histogram;
 pub type MsgType = Vec<u8>;
 
 #[derive(Debug, Serialize)]
-struct BenchStats {
+pub struct BenchStats {
     pub num_sent: usize,
     pub num_received: usize,
-    pub latency_avg: f64,
     pub latency_median: u64,
+    pub latency_p95: u64,
+    pub latency_p99: u64,
     pub latency_std: f64,
 }
 
@@ -34,8 +34,9 @@ impl BenchStats {
         return BenchStats {
             num_sent: send_times.len(),
             num_received: latencies.len(),
-            latency_avg: hist.mean(),
             latency_median: hist.value_at_quantile(0.5),
+            latency_p95: hist.value_at_quantile(0.95),
+            latency_p99: hist.value_at_quantile(0.99),
             latency_std: hist.stdev(),
         };
     }
@@ -53,7 +54,6 @@ pub struct Benchmarker {
     pub num_messages: usize,
     pub out_file: Option<String>,
     time_wait: Duration,
-    stats: Option<BenchStats>,
     message_size: usize,
 }
 
@@ -63,12 +63,11 @@ impl Benchmarker {
             time_wait: Duration::from_secs_f64(duration.as_secs_f64() / num_messages as f64),
             num_messages,
             out_file: None,
-            stats: None,
             message_size,
         }
     }
 
-    pub fn run(&mut self, mut sender: impl Sender, mut receiver: impl Receiver + Send + 'static) {
+    pub fn run(&mut self, mut sender: impl Sender, mut receiver: impl Receiver + Send + 'static) -> BenchStats {
         let listen_handle = std::thread::spawn(move || {
             let recv_times = receiver.listen();
             return recv_times;
@@ -89,13 +88,7 @@ impl Benchmarker {
 
         let recv_times = listen_handle.join().unwrap().unwrap();
 
-        self.stats = Some(BenchStats::new(send_times, recv_times));
-        
-        dbg!(&self.stats);
-
-        //let mut file = std::fs::File::create(settings.out_file).unwrap();
-        //serde_json::to_writer_pretty(&mut file, &stats).unwrap();
-        //
+        return BenchStats::new(send_times, recv_times);
     }
 }
 
@@ -104,9 +97,9 @@ fn create_message(msg_nr: usize, length: usize) -> MsgType {
 
     let mut msg = Vec::from(msg_nr.to_ne_bytes());
 
-    let string = "a".repeat(length-8);
-    let mut padding = Vec::from(string.as_bytes());
-    msg.append(&mut padding);
+    let data = "a".repeat(length*8-8);
+    let mut data = Vec::from(data.as_bytes());
+    msg.append(&mut data);
 
     return msg;
 }
