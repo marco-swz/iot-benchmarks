@@ -97,7 +97,7 @@ fn create_message(msg_nr: usize, length: usize) -> MsgType {
 
     let mut msg = Vec::from(msg_nr.to_ne_bytes());
 
-    let data = "a".repeat(length*8-8);
+    let data = "a".repeat(length-8);
     let mut data = Vec::from(data.as_bytes());
     msg.append(&mut data);
 

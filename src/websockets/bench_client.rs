@@ -116,7 +116,7 @@ impl Receiver for WsReceiver {
 fn run_bench(addr: &String, num_messages: usize, duration: Duration, message_size: usize) {
     let send = WsSender::new(addr);
     let recv = WsReceiver::new(addr, num_messages, duration);
-    let mut bench = Benchmarker::new(num_messages, duration, message_size);
+    let mut bench = Benchmarker::new(num_messages, duration, message_size+8);
 
     bench.run(send, recv);
 }

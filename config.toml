@@ -1,11 +1,11 @@
 
 [tcp]
-address = "localhost:1883"
+address = "localhost:3030"
 message_size = 5
 
 [tcp.schedule]
 start_req_per_sec = 5
-stop_req_per_sec = 1000
+stop_req_per_sec = 100
 steps = 5
 secs_per_step = 5
 

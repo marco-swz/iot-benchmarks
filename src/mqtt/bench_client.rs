@@ -67,7 +67,6 @@ impl Receiver for WsReceiver {
                 continue;
             };
 
-            dbg!(&msg);
             let Some(msg) = msg else {
                 if self.client.is_connected() || !try_reconnect(&self.client) {
                     break;

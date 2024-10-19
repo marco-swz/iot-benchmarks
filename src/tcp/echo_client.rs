@@ -6,10 +6,9 @@ fn main() {
     let args: Vec<String> = std::env::args()
         .collect();
 
-    let addr_default = "localhost:9001".to_string();
+    let addr_default = "localhost:3030".to_string();
     let addr = args.get(1).unwrap_or(&addr_default).to_string();
-    let mut message_size = args.get(2).unwrap_or(&"10".to_string()).parse().unwrap();
-    message_size += 8;
+    let message_size = 5*8 + 8;
 
     let server_recv = TcpListener::bind(addr).unwrap();
     for stream in server_recv.incoming() {

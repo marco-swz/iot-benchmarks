@@ -66,7 +66,7 @@ impl Receiver for WsReceiver {
                 break;
             }
 
-            let mut msg = vec![0u8; self.message_size];
+            let mut msg = vec![0u8; self.message_size*8 + 8];
             let Ok(msg_size) = self.stream.read(&mut msg) else {
                 continue;
             };
@@ -79,6 +79,7 @@ impl Receiver for WsReceiver {
             num_received += 1;
 
             let Ok(idx) = index_from_message(msg) else {
+                println!("parse error");
                 continue;
             };
             msgs[idx] = Some(Instant::now());
