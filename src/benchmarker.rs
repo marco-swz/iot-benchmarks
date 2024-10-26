@@ -70,6 +70,7 @@ impl Benchmarker {
     pub fn run(&mut self, mut sender: impl Sender, mut receiver: impl Receiver + Send + 'static) -> BenchStats {
         let listen_handle = std::thread::spawn(move || {
             let recv_times = receiver.listen();
+            drop(receiver);
             return recv_times;
         });
 

@@ -6,23 +6,27 @@ use anyhow::Result;
 
 #[path="../benchmarker.rs"]
 mod benchmarker;
-
 use benchmarker::{Receiver, Sender, MsgType, index_from_message, Benchmarker};
 
-struct WsSender {
+#[path = "../config.rs"]
+mod config;
+use config::Config;
+
+struct MqttSender {
     client: Client,
+    topic_send: String,
 }
 
-impl WsSender {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+impl MqttSender {
+    pub fn new(client: Client, topic_send: String) -> Self {
+        Self { client, topic_send }
     }
 }
 
-impl Sender for WsSender {
+impl Sender for MqttSender {
     fn send(&mut self, msg: MsgType) -> Result<()> {
         let rsp = mqtt::MessageBuilder::new()
-            .topic("mqtt_req")
+            .topic(&self.topic_send)
             .payload(msg)
             .qos(1)
             .finalize();
@@ -31,13 +35,20 @@ impl Sender for WsSender {
     }
 }
 
-struct WsReceiver {
+impl Drop for MqttSender{
+    fn drop(&mut self) {
+        self.client.disconnect(None).unwrap();
+    }
+}
+
+
+struct MqttReceiver {
     client: Client,
     num_messages: usize,
     duration: Duration,
 }
 
-impl WsReceiver {
+impl MqttReceiver {
     pub fn new(
         client: Client,
         num_messages: usize,
@@ -51,7 +62,7 @@ impl WsReceiver {
     }
 }
 
-impl Receiver for WsReceiver {
+impl Receiver for MqttReceiver {
     fn listen(&mut self) -> Result<Vec<Option<Instant>>> {
 
         let time_start = Instant::now();
@@ -63,9 +74,18 @@ impl Receiver for WsReceiver {
         println!("Waiting for messages..");
 
         loop {
+            if time_start.elapsed() > self.duration + Duration::from_secs(5) {
+                break;
+            }
+
+            if num_received >= self.num_messages {
+                break;
+            }
+
             let Ok(msg) = rx.try_recv() else {
                 continue;
             };
+
 
             let Some(msg) = msg else {
                 if self.client.is_connected() || !try_reconnect(&self.client) {
@@ -79,21 +99,19 @@ impl Receiver for WsReceiver {
             };
 
             timestamps[idx] = Some(Instant::now());
-
             num_received += 1;
-            if num_received >= self.num_messages {
-                break;
-            }
-
-            if time_start.elapsed() > self.duration + Duration::from_secs(5) {
-                break;
-            }
         }
 
         return Ok(timestamps);
 
     }
 }
+
+//impl Drop for MqttReceiver{
+//    fn drop(&mut self) {
+//        self.client.disconnect(None).unwrap();
+//    }
+//}
 
 
 fn mqtt_init(addr: &str, topic: &str) -> Client {
@@ -165,23 +183,36 @@ fn try_reconnect(client: &mqtt::Client) -> bool {
     return false;
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args()
-        .collect();
+fn run_bench(config: Config, num_messages: usize, duration: Duration) {
+    println!("init");
+    let client = mqtt_init(&config.mqtt.address, &config.mqtt.topic_recv);
+    let message_size = config.mqtt.message_size%8 + 8;
 
-    let addr_default = "localhost:1883".to_string();
-    let addr = args.get(1).unwrap_or(&addr_default).to_string();
-    let num_messages = args.get(2).unwrap_or(&"10".to_string()).parse().unwrap();
-    let duration = Duration::from_secs(args.get(3).unwrap_or(&"5".to_string()).parse().unwrap());
-    let mut message_size = args.get(4).unwrap_or(&"10".to_string()).parse().unwrap();
-
-    let client_send = mqtt_init(&addr, &"mqtt_req");
-    let client_recv = mqtt_init(&addr, &"mqtt_rsp");
-    message_size += 8;
-
-    let send = WsSender::new(client_send);
-    let recv = WsReceiver::new(client_recv, num_messages, duration);
+    let send = MqttSender::new(client.clone(), config.mqtt.topic_send);
+    let recv = MqttReceiver::new(client, num_messages, duration);
     let mut bench = Benchmarker::new(num_messages, duration, message_size);
 
-    bench.run(send, recv);
+    let stats = bench.run(send, recv);
+    dbg!(&stats);
+}
+
+fn main() {
+    let config: Config = toml::from_str(
+        &std::fs::read_to_string("config.toml").unwrap()
+    ).unwrap();
+
+    let schedule = config.tcp.schedule.clone();
+
+    let step = (schedule.stop_req_per_sec - schedule.start_req_per_sec) / schedule.steps as f64;
+    for i in 0..schedule.steps {
+        let duration = Duration::from_secs(schedule.secs_per_step);
+        let num_messages = (schedule.start_req_per_sec * i as f64 + step) * schedule.secs_per_step as f64;
+
+        run_bench(
+            config.clone(),
+            num_messages.floor() as usize, 
+            duration, 
+        );
+    }
+
 }

@@ -22,6 +22,8 @@ secs_per_step = 5
 [mqtt]
 address = "localhost:1883"
 message_size = 5
+topic_send = "mqtt_send"
+topic_recv = "mqtt_recv"
 
 [mqtt.schedule]
 start_req_per_sec = 5

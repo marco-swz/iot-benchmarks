@@ -51,8 +51,8 @@ fn main() -> Result<()> {
                 if conn_rsp.session_present {
                     println!("Session already present on broker");
                 } else {
-                    println!("Subscribing to topic 'mqtt_req'");
-                    client.subscribe("mqtt_req", 1)
+                    println!("Subscribing to topic 'mqtt_send'");
+                    client.subscribe("mqtt_send", 1)
                         .and_then(|rsp| {
                             return rsp.subscribe_response().ok_or(mqtt::Error::General("Bad response"));
                         })
@@ -82,7 +82,7 @@ fn main() -> Result<()> {
         if let Some(req) = msg {
 
             let rsp = mqtt::MessageBuilder::new()
-                .topic("mqtt_rsp")
+                .topic("mqtt_recv")
                 .payload(req.payload())
                 .qos(1)
                 .finalize();
